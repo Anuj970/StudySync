@@ -2,7 +2,7 @@ import "dotenv/config";
 import express,{Request,Response} from "express";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "./generated/prisma/client.js";
-
+import jwt from "jsonwebtoken";
 const app = express();
 const prisma = new PrismaClient();
 app.use(express.json());
@@ -26,9 +26,29 @@ app.post("/auth/signup", async (req: Request, res: Response) => {
         res.status(400).json({error:"Could not create user try again"});
     }
 });
-app.post("/auth/login", (req: Request, res: Response) => {
-  res.json({ message: "login endpoint hit" });
+app.post("/auth/login", async (req: Request, res: Response) => {
+ try{
+     const {email ,password}= req.body;
+     const user= await prisma.user.findUnique({where:{email}});
+     if (!user){
+         return res.status(401).json({error:"Invalid email or password Sign Up to create"})
+     }
+     const passwordMatches = await bcrypt.compare(password, user.password);
+     if (!passwordMatches){
+         return res.status(401).json({error:"Invalid email or password Sign Up to create"});
+     }
+     const token = jwt.sign(
+         { userId:user.id},
+         process.env.JWT_SECRET as string,
+         {expiresIn:"7d"}
+     );
+     res.json({token,user:{id:user.id,name:user.name,email:user.email}});
+ } catch (error){
+     console.error(error)
+     res.status(400).json({error:"Could not log in. Sign Up first"});
+ }
 });
+
 app.listen(PORT,()=>{
     console.log(`Server running on http://localhost:${PORT}`);
 });
