@@ -73,6 +73,47 @@ app.post("/auth/login", async (req: Request, res: Response) => {
      res.status(400).json({error:"Could not log in. Sign Up first"});
  }
 });
+app.post("/groups", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const { name } = req.body;
+
+        const group = await prisma.studyGroup.create({
+            data: {
+                name,
+                members: {
+                    create: { userId: req.userId as string },
+                },
+            },
+        });
+
+        res.json(group);
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({ error: "Could not create group" });
+    }
+});
+app.get("/groups", async (req: Request, res: Response) => {
+    const groups = await prisma.studyGroup.findMany({
+        include: {
+            _count: { select: { members: true } },
+        },
+    });
+    res.json(groups);
+});
+app.post("/groups/:id/join", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const membership = await prisma.groupMembership.create({
+            data: {
+                userId: req.userId as string,
+                groupId: req.params.id,
+            },
+        });
+        res.json(membership);
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({ error: "Could not join group (maybe already a member?)" });
+    }
+});
 
 app.listen(PORT,()=>{
     console.log(`Server running on http://localhost:${PORT}`);
