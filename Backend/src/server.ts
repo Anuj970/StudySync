@@ -114,6 +114,51 @@ app.post("/groups/:id/join", requireAuth, async (req: AuthRequest, res: Response
         res.status(400).json({ error: "Could not join group (maybe already a member?)" });
     }
 });
+app.post("/groups/:id/notes", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const groupId = req.params.id;
+
+        const membership = await prisma.groupMembership.findUnique({
+            where: {
+                userId_groupId: {
+                    userId: req.userId as string,
+                    groupId,
+                },
+            },
+        });
+
+        if (!membership) {
+            return res.status(403).json({ error: "You must join this group to post notes" });
+        }
+
+        const { title, content } = req.body;
+
+        const note = await prisma.note.create({
+            data: {
+                title,
+                content,
+                groupId,
+                uploadedById: req.userId as string,
+            },
+        });
+
+        res.json(note);
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({ error: "Could not create note" });
+    }
+});
+
+app.get("/groups/:id/notes", async (req: Request, res: Response) => {
+    const notes = await prisma.note.findMany({
+        where: { groupId: req.params.id },
+        include: {
+            uploadedBy: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+    });
+    res.json(notes);
+});
 
 app.listen(PORT,()=>{
     console.log(`Server running on http://localhost:${PORT}`);
