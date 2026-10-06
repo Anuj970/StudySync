@@ -160,6 +160,52 @@ app.get("/groups/:id/notes", async (req: Request, res: Response) => {
     res.json(notes);
 });
 
+app.post("/groups/:id/posts", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const groupId = req.params.id;
+
+        const membership = await prisma.groupMembership.findUnique({
+            where: {
+                userId_groupId: {
+                    userId: req.userId as string,
+                    groupId,
+                },
+            },
+        });
+
+        if (!membership) {
+            return res.status(403).json({ error: "You must join this group to post" });
+        }
+
+        const { content } = req.body;
+
+        const post = await prisma.post.create({
+            data: {
+                content,
+                groupId,
+                authorId: req.userId as string,
+            },
+        });
+
+        res.json(post);
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({ error: "Could not create post" });
+    }
+});
+
+app.get("/groups/:id/posts", async (req: Request, res: Response) => {
+    const posts = await prisma.post.findMany({
+        where: { groupId: req.params.id },
+        include: {
+            author: { select: { name: true } },
+            _count: { select: { replies: true } },
+        },
+        orderBy: { createdAt: "desc" },
+    });
+    res.json(posts);
+});
+
 app.listen(PORT,()=>{
     console.log(`Server running on http://localhost:${PORT}`);
 });
