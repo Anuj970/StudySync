@@ -206,6 +206,63 @@ app.get("/groups/:id/posts", async (req: Request, res: Response) => {
     res.json(posts);
 });
 
+app.post("/posts/:id/replies", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const postId = req.params.id;
+
+        const post = await prisma.post.findUnique({ where: { id: postId } });
+        if (!post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        const membership = await prisma.groupMembership.findUnique({
+            where: {
+                userId_groupId: {
+                    userId: req.userId as string,
+                    groupId: post.groupId,
+                },
+            },
+        });
+
+        if (!membership) {
+            return res.status(403).json({ error: "You must join this group to reply" });
+        }
+
+        const { content } = req.body;
+
+        const reply = await prisma.reply.create({
+            data: {
+                content,
+                postId,
+                authorId: req.userId as string,
+            },
+        });
+
+        res.json(reply);
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({ error: "Could not create reply" });
+    }
+});
+
+app.get("/posts/:id", async (req: Request, res: Response) => {
+    const post = await prisma.post.findUnique({
+        where: { id: req.params.id },
+        include: {
+            author: { select: { name: true } },
+            replies: {
+                include: { author: { select: { name: true } } },
+                orderBy: { createdAt: "asc" },
+            },
+        },
+    });
+
+    if (!post) {
+        return res.status(404).json({ error: "Post not found" });
+    }
+
+    res.json(post);
+});
 app.listen(PORT,()=>{
     console.log(`Server running on http://localhost:${PORT}`);
 });
